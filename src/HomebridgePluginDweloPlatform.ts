@@ -14,7 +14,7 @@ export class HomebridgePluginDweloPlatform implements StaticPlatformPlugin {
   ) {
     this.dweloAPI = new DweloAPI(config.token, config.gatewayId);
 
-    this.log.debug(`Finished initializing platform: ${this.config.name}`);
+    this.log.debug(`Finished initializing platform: ${this.config.name} with config ${JSON.stringify(config)}`);
   }
 
   accessories(callback: (foundAccessories: AccessoryPlugin[]) => void): void {
@@ -25,7 +25,7 @@ export class HomebridgePluginDweloPlatform implements StaticPlatformPlugin {
             case 'switch':
               return new DweloSwitchAccessory(this.log, this.api, this.dweloAPI, d.givenName, d.uid);
             case 'lock':
-              return new DweloLockAccessory(this.log, this.api, this.config.lockPollMs, this.dweloAPI, d.givenName, d.uid);
+              return new DweloLockAccessory(this.log, this.api, this.config.lockPollMs || 60000, this.dweloAPI, d.givenName, d.uid);
             default:
               this.log.warn(`Support for Dwelo accessory type: ${d.deviceType} is not implemented`);
               this.log.warn('%s', d);
