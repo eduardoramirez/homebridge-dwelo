@@ -20,6 +20,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
   constructor(
     private readonly log: Logging,
     private readonly api: API,
+    private readonly lockPollMs: number,
     private readonly dweloAPI: DweloAPI,
     public readonly name: string,
     private readonly lockID: number) {
@@ -34,7 +35,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
 
     this.batteryService = new api.hap.Service.Battery(name);
 
-    this.pollTimer = setInterval(() => this.poll(), 60_000);
+    this.pollTimer = setInterval(() => this.poll(), this.lockPollMs);
 
     log.info(`Dwelo Lock '${name}' created!`);
   }
@@ -160,7 +161,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
       this.log.warn('Lock operation watchdog expired; reconciling.');
       this.inFlight = false;
       await this.reconcileTargetWithCurrent();
-    }, 60_000);
+    }, 2 * this.lockPollMs);
   }
 
   private async reconcileTargetWithCurrent() {
