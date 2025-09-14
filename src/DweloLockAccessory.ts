@@ -11,7 +11,11 @@ import { DweloAPI, Sensor } from './DweloAPI';
 export class DweloLockAccessory implements AccessoryPlugin {
   private readonly lockService: Service;
   private readonly batteryService: Service;
-  private targetState: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  private inFlight = false;
+  private desiredTarget: number | null = null;
+  private pollTimer?: NodeJS.Timeout;
+  private watchdog?: NodeJS.Timeout;
 
   constructor(
     private readonly log: Logging,
@@ -29,6 +33,8 @@ export class DweloLockAccessory implements AccessoryPlugin {
       .onSet(this.setTargetLockState.bind(this));
 
     this.batteryService = new api.hap.Service.Battery(name);
+
+    this.pollTimer = setInterval(() => this.poll(), 60_000);
 
     log.info(`Dwelo Lock '${name}' created!`);
   }
@@ -50,17 +56,35 @@ export class DweloLockAccessory implements AccessoryPlugin {
   }
 
   private async getTargetLockState() {
-    this.log.info(`Current target lock state was: ${this.targetState}`);
-    return this.targetState || (await this.getLockState());
+    if (this.desiredTarget !== null) {
+      return this.desiredTarget;
+    }
+    // fall back to mapping current -> target
+    const cur = await this.getLockState();
+    return (cur === this.api.hap.Characteristic.LockCurrentState.SECURED)
+      ? this.api.hap.Characteristic.LockTargetState.SECURED
+      : this.api.hap.Characteristic.LockTargetState.UNSECURED;
   }
 
   private async setTargetLockState(value: CharacteristicValue) {
-    this.targetState = value;
+    const T = this.api.hap.Characteristic.LockTargetState;
+    const target = (value === T.SECURED) ? T.SECURED : T.UNSECURED;
 
-    this.log.info(`Setting lock to: ${value}`);
-    await this.dweloAPI.toggleLock(!!value, this.lockID);
-    this.log.info('Lock toggle completed');
-    this.lockService.getCharacteristic(this.api.hap.Characteristic.LockCurrentState).updateValue(value);
+    // coalesce duplicate commands while one is in flight
+    if (this.inFlight && this.desiredTarget === target) {
+      this.log.debug('Coalescing duplicate lock request:', target);
+      return; // ACK immediately
+    }
+
+    this.desiredTarget = target;
+    this.lockService.getCharacteristic(T).updateValue(target);
+    this.log.info(`Setting lock to: ${target}`);
+
+    if (!this.inFlight) {
+      this.inFlight = true;
+      this.sendLockCommand(target);
+      this.startWatchdog();
+    }
   }
 
   private toLockState(sensors: Sensor[]) {
@@ -88,5 +112,62 @@ export class DweloLockAccessory implements AccessoryPlugin {
     this.batteryService.getCharacteristic(this.api.hap.Characteristic.StatusLowBattery).updateValue(batteryStatus);
 
     this.log.info('Lock battery: ', batteryLevel);
+  }
+
+  private async sendLockCommand(target: number) {
+    try {
+      const desired = target === this.api.hap.Characteristic.LockTargetState.SECURED;
+      await this.dweloAPI.toggleLock(desired, this.lockID);
+    } catch (err) {
+      this.log.warn('Lock command failed:', err);
+      this.inFlight = false;
+      await this.reconcileTargetWithCurrent();
+    }
+  }
+
+  private async poll() {
+    try {
+      const sensors = await this.dweloAPI.sensors(this.lockID);
+      const currentState = this.toLockState(sensors);
+
+      this.setBatteryLevel(sensors);
+      this.lockService.getCharacteristic(this.api.hap.Characteristic.LockCurrentState).updateValue(currentState);
+
+      if (this.inFlight && this.desiredTarget !== null) {
+        const desiredState =
+          this.desiredTarget === this.api.hap.Characteristic.LockTargetState.SECURED
+            ? this.api.hap.Characteristic.LockCurrentState.SECURED
+            : this.api.hap.Characteristic.LockCurrentState.UNSECURED;
+
+        if (currentState === desiredState) {
+          this.inFlight = false;
+          if (this.watchdog) {
+            clearTimeout(this.watchdog);
+          }
+          this.log.info('Lock toggle completed');
+        }
+      }
+    } catch (e) {
+      this.log.warn(`Failed to fetch status of lock ${this.name}`);
+    }
+  }
+
+  private startWatchdog() {
+    if (this.watchdog) {
+      clearTimeout(this.watchdog);
+    }
+    this.watchdog = setTimeout(async () => {
+      this.log.warn('Lock operation watchdog expired; reconciling.');
+      this.inFlight = false;
+      await this.reconcileTargetWithCurrent();
+    }, 60_000);
+  }
+
+  private async reconcileTargetWithCurrent() {
+    const currentState = await this.getLockState();
+    const T = this.api.hap.Characteristic.LockTargetState;
+    this.desiredTarget =
+      currentState === this.api.hap.Characteristic.LockCurrentState.SECURED ? T.SECURED : T.UNSECURED;
+    this.lockService.getCharacteristic(T).updateValue(this.desiredTarget);
   }
 }
