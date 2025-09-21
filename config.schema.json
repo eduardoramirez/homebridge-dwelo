@@ -16,9 +16,16 @@
         "required": true
       },
       "lockPollMs": {
-        "title": "How often to poll for the lock status in milliseconds",
+        "title": "How often to poll for the lock status (milliseconds)",
         "type": "number",
-        "default": 60000
+        "default": 60000,
+        "minimum": 1000
+      },
+      "autoLockMinutes": {
+        "title": "Auto lock delay (minutes)",
+        "type": "number",
+        "default": 3,
+        "minimum": 0
       }
     }
   }

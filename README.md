@@ -167,3 +167,11 @@ sudo npm install -g homebridge-example-plugin@beta
 ```
 
 
+## Configuration
+
+This plugin supports an auto-lock option for Dwelo locks:
+
+- `autoLockMinutes` (number): Minutes to wait after a lock becomes unlocked before automatically relocking. Default is `3`. Set to `0` to disable.
+
+Ensure the `pluginAlias` in `config.schema.json` matches `PLATFORM_NAME` in `src/settings.ts`.
+

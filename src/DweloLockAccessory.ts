@@ -16,11 +16,13 @@ export class DweloLockAccessory implements AccessoryPlugin {
   private desiredTarget: number | null = null;
   private pollTimer?: NodeJS.Timeout;
   private watchdog?: NodeJS.Timeout;
+  private autoLockTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly log: Logging,
     private readonly api: API,
     private readonly lockPollMs: number,
+    private readonly autoLockMinutes: number,
     private readonly dweloAPI: DweloAPI,
     public readonly name: string,
     private readonly lockID: number) {
@@ -134,6 +136,16 @@ export class DweloLockAccessory implements AccessoryPlugin {
       this.setBatteryLevel(sensors);
       this.lockService.getCharacteristic(this.api.hap.Characteristic.LockCurrentState).updateValue(currentState);
 
+      // Maintain auto-lock timer based on current state
+      if (currentState === this.api.hap.Characteristic.LockCurrentState.UNSECURED) {
+        // Ensure timer is set if unlocked
+        if (!this.autoLockTimer) {
+          this.startAutoLockTimer();
+        }
+      } else if (currentState === this.api.hap.Characteristic.LockCurrentState.SECURED) {
+        this.cancelAutoLockTimer();
+      }
+
       if (this.inFlight && this.desiredTarget !== null) {
         const desiredState =
           this.desiredTarget === this.api.hap.Characteristic.LockTargetState.SECURED
@@ -150,6 +162,32 @@ export class DweloLockAccessory implements AccessoryPlugin {
       }
     } catch (e) {
       this.log.warn(`Failed to fetch status of lock ${this.name}`);
+    }
+  }
+
+  private startAutoLockTimer() {
+    if (this.autoLockMinutes <= 0) {
+      return;
+    }
+
+    if (this.autoLockTimer) {
+      clearTimeout(this.autoLockTimer);
+    }
+    this.autoLockTimer = setTimeout(async () => {
+      this.log.info(`Auto-lock timer elapsed (${Math.round(this.autoLockMinutes)}m). Relocking.`);
+      try {
+        await this.setTargetLockState(this.api.hap.Characteristic.LockTargetState.SECURED);
+      } catch (e) {
+        this.log.warn('Auto-lock attempt failed:', e);
+      }
+    }, this.autoLockMinutes * 60 * 1000);
+    this.log.info(`Auto-lock scheduled in ${Math.round(this.autoLockMinutes)} minute(s).`);
+  }
+
+  private cancelAutoLockTimer() {
+    if (this.autoLockTimer) {
+      clearTimeout(this.autoLockTimer);
+      this.autoLockTimer = undefined;
     }
   }
 
