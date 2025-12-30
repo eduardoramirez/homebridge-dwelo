@@ -6,7 +6,7 @@ import {
   Service,
 } from 'homebridge';
 
-import { DweloAPI, Sensor } from './DweloAPI';
+import { DweloAPI, Sensor } from './DweloAPI.js';
 
 export class DweloLockAccessory implements AccessoryPlugin {
   private readonly lockService: Service;
@@ -54,7 +54,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
     const sensors = await this.dweloAPI.sensors(this.lockID);
     const state = this.toLockState(sensors);
     this.setBatteryLevel(sensors);
-    this.log.info(`Current state of the lock was returned: ${state}`);
+    this.log.debug(`Current state of the lock was returned: ${state}`);
     return state;
   }
 
@@ -161,7 +161,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
         }
       }
     } catch (e) {
-      this.log.warn(`Failed to fetch status of lock ${this.name}`);
+      this.log.warn(`Failed to fetch status of lock ${this.name}`, e);
     }
   }
 

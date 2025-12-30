@@ -5,7 +5,7 @@ import {
   Service,
 } from 'homebridge';
 
-import { DweloAPI } from './DweloAPI';
+import { DweloAPI } from './DweloAPI.js';
 
 export class DweloSwitchAccessory implements AccessoryPlugin {
   name: string;
