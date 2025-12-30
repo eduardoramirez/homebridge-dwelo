@@ -27,7 +27,7 @@ export class DweloSwitchAccessory implements AccessoryPlugin {
       })
       .onSet(async value => {
         await dweloAPI.toggleSwitch(value as boolean, switchID);
-        log.debug(`Switch state was set to: ${value ? 'ON' : 'OFF'}`);
+        log.info(`Switch state was set to: ${value ? 'ON' : 'OFF'}`);
       });
 
     log.info(`Dwelo Switch '${name} ' created!`);

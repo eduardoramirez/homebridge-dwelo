@@ -54,7 +54,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
     const sensors = await this.dweloAPI.sensors(this.lockID);
     const state = this.toLockState(sensors);
     this.setBatteryLevel(sensors);
-    this.log.info(`Current state of the lock was returned: ${state}`);
+    this.log.debug(`Current state of the lock was returned: ${state}`);
     return state;
   }
 
@@ -114,7 +114,7 @@ export class DweloLockAccessory implements AccessoryPlugin {
     this.batteryService.getCharacteristic(this.api.hap.Characteristic.BatteryLevel).updateValue(batteryLevel);
     this.batteryService.getCharacteristic(this.api.hap.Characteristic.StatusLowBattery).updateValue(batteryStatus);
 
-    this.log.info('Lock battery: ', batteryLevel);
+    this.log.debug('Lock battery: ', batteryLevel);
   }
 
   private async sendLockCommand(target: number) {
